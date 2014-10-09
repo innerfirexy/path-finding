@@ -1,0 +1,1 @@
+dists/quicklisp/software/trivial-shell-20130312-git/trivial-shell.asd

@@ -1,0 +1,577 @@
+#|
+High-level planning model
+Temporarily specialized to spatial domain
+See e.g. Tolman, 1948 and Lynch 1960 
+Ontology (symbolic):
+Locations - coordinates, size (could both be compound chunks)
+Paths - connect two locations (longer-range paths? directed? symmetrical?)
+Mechanisms (subsymbolic):
+Base-level - salience of location (& path), e.g. frequency of traversal, size, centrality (connectedness)
+Association/similarities - bias search between current and target, i.e. forward, backward, hierarchical
+			   reflect factors like fan (from), recency, distance, etc
+Process (goal):
+Plan - current and target locations, state
+Issues:
+- represent all choice points or just the most central?
+- represent all locations or larger areas (rooms, etc)?
+- represent paths both symbolically (path chunks) and subsymbolically (associations)
+Learning:
+- subgoals become paths
+- traversing location increases both location and path traveled
+;;; Algorithm
+0. If current and target location are identical, then declare success and go to 4
+1. Select most active intermediate location based on current and target location *** reflects activation and inhibition factors
+2. If location has already been visited then inhibit and return to 1
+2. If intermediate location is directly connected to current or target then update that end and return to 0
+3. Set subgoals to go from current to intermediate and intermediate to target (in either order) and return to 0
+4. If parent goals exist, return to more direct one and go back to 0
+5. Otherwise complete process with success!
+;;; TODO
+- merge types path and location to enable learning of intermediate plans
+- mark locations as visited
+
+12/29/08
+Increase IA to 2.0 or 5.0 to have a full unit of AI spreading from each side in order to deal with tree
+
+1/3/08
+Use state for intermediate destination, which means no modification of popped goal and
+a record of the path and its hierarchical nature
+
+1/5/08
+Retrieve path rather than location
+Could be multiple constraints on path, from free association to forward-chaining to backward-chaining to hierarchical
+
+1/6/08
+Implement double constraint using partial matching since single one is not enough
+
+TODO
+Possible alternative: retrieve paths rather than locations, which would allow for more natural
+consideration of forward and backward planning (which would allow for backtracking after exhaustion
+of alternatives) as well as imposition of semantic constraints (similarity to current and target).
+It could be generalized to hierarchical planning by softening semantic constraints on current and target.
+ 
+|#
+
+(clear-all)
+
+(sgp :era t :lf 1.0 :blc 5.0 :ga 4.0 :pm t :mp 2.5 :rt 0.0 :v nil)
+
+(chunk-type location coordinates size)
+
+(chunk-type path current target state)  ;;; merge into chunk type plan - for now use state to mark used path for backtracking
+
+(chunk-type plan current target state parent)  ;;; avoid trouble with partial matching when popping goals
+
+(add-dm
+   (free isa chunk)
+   (used isa chunk))
+
+(set-similarities (free used -10.0) (used free -10.0))
+
+;;; Arrived
+(p finish
+   =goal>
+      isa plan
+      current =current
+      target =current
+      state planning
+      parent none
+==>
+   !output! (No more subgoals - planning completed)
+   =goal>
+      state completed
+   !stop!)
+
+;;; Arrived - check if any other goal
+(p arrived
+   =goal>
+      isa plan
+      current =current
+      target =current
+      state planning
+      parent =parent
+==>
+   !output! (Arrived at target =current - Checking any subgoals remaining)
+   =goal>
+      state completed
+   +retrieval>
+      =parent)
+
+(p returning
+   =goal>
+      isa plan
+      state completed
+   =retrieval>
+      isa plan
+      current =current
+      target =target
+      state =intermediate
+      parent =parent
+==>
+  !eval! (visual-move-to =intermediate)
+  !output! (Returning to goal =retrieval moving from location =current to  =intermediate on way to =target)
+   !eval! (move =intermediate)
+   +goal>
+      isa plan
+      current =intermediate
+      target =target
+      state planning
+      parent =parent)
+
+;;; Select most active path
+;;; Could be multiple strategies, e.g. free assoc, forward-chain, backward-chain and hierarchical
+;;; The latter would require partial matching, which for simplicity we will not apply here
+;;; Instead, we will focus on forward chaining, maybe with backtracking
+;;; Actually, need both constraints
+
+;;; key retrieval production
+(p select-best-path
+   =goal>
+      isa plan
+      current =current
+      target =target
+      state planning
+==>
+   !output! (Retrieving forward link from location =current hopefully in direction =target)
+   +retrieval>
+      isa path
+      current =current
+      target =target
+      state free
+   =goal>
+      state selecting)
+
+;;; forward chaining production
+(p forward
+   =goal>
+      isa plan
+      current =current
+      target =target
+      state selecting
+      parent =parent
+   =retrieval>
+      isa path
+      current =current
+      target =intermediate
+==>
+   !eval! (visual-move-to =intermediate)
+   !output! (Selected path from location =current to =intermediate on way to =target - advancing and subgoaling rest)
+   !eval! (move =intermediate)
+   =retrieval>
+      state used
+   =goal>
+      state =intermediate
+   +goal>
+      isa plan
+      current =intermediate
+      target =target
+      state planning
+      parent =parent)
+
+;;; backward chaining production
+(p backward
+   =goal>
+      isa plan
+      current =current
+      target =target
+      state selecting
+   =retrieval>
+      isa path
+      current =new-current ;;; assumed not to be current - otherwise forward
+      target =new-target ;;; could be target or not - will decide later
+==>
+   !output! (Selected path from location =new-current to =new-target - subgoaling getting there)
+   =retrieval>
+      state used
+   =goal>
+      current =new-current
+      state =new-target
+   +goal>
+      isa plan
+      current =current
+      target =new-current
+      state planning
+      parent =goal)
+
+(p visual-search
+   =goal>
+      isa plan
+      current =current
+      target =target
+      state selecting
+   =retrieval>
+      isa error
+==>
+  !output! (No stored solution found.  Commencing visual search.)
+  !bind! =new-current (visual-search =current =target)
+  =goal>
+      current =new-current
+      state planning
+)
+
+;; ;;; backtracking - actually most backtracking will consist of selecting the reverse path
+;; (p backtracking
+;;    =goal>
+;;       isa plan
+;;       current =current
+;;       target =target
+;;       state selecting
+;;    =retrieval>
+;;       isa error
+;; ==>
+;;    !output! (Dead end from location =current to =target - backtracking)
+;;    =goal>
+;;       state backtracking
+;;    +retrieval>
+;;       isa plan
+;;       target =target
+;;       state =current)
+
+;;; restarting search - note assumption about ability to reverse path
+(p restarting
+   =goal>
+      isa plan
+      current =current
+      target =target
+      state backtracking
+   =retrieval>
+      isa plan
+      current =restart
+      target =target
+      state =current
+==>
+
+   !eval! (visual-move-to =restart)
+   !output! (Restarting back from location =current to =restart on way to =target)
+   !eval! (move =restart)
+   +goal>
+      isa plan
+      current =restart
+      target =target
+      state planning)
+
+;;; failure - abandoning search
+(p failed
+   =goal>
+      isa plan
+      current =current
+      target =target
+      state backtracking
+   =retrieval>
+      isa error
+==>
+   !output! (No record of intermediate locations - lost and terminating)
+   =goal>
+      state failed
+   !stop!)
+
+#|
+CL-USER 840 > (reload)
+; Loading text file /Users/cl/Work/MURI/Models/Path Planning/high-level planning.actr
+#P"/Users/cl/Work/MURI/Models/Path Planning/high-level planning.actr"
+
+CL-USER 841 > (sgp :ga :mp)
+ :ga  4.000
+ :mp  2.500
+(4.0 2.5)
+
+CL-USER 842 > (reset-model-parameters (make-tree 2 2))
+7
+
+CL-USER 843 > (plan 'node-1-1 'node-2-2 60.0)
+ Time  0.000: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Node-1-1 HOPEFULLY IN DIRECTION Node-2-2 
+ Time  0.050: Select-Best-Path Fired
+ Time  0.107: Node-1-To-Node Retrieved
+ Time  0.107: Backward Selected
+ SELECTED PATH FROM LOCATION Node-1 TO Node - SUBGOALING GETTING THERE 
+ Time  0.157: Backward Fired
+ Time  0.157: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Node-1-1 HOPEFULLY IN DIRECTION Node-1 
+ Time  0.207: Select-Best-Path Fired
+ Time  0.234: Node-1-1-To-Node-1 Retrieved
+ Time  0.234: Forward Selected
+ SELECTED PATH FROM LOCATION Node-1-1 TO Node-1 ON WAY TO Node-1 - ADVANCING AND SUBGOALING REST 
+ Time  0.284: Forward Fired
+ Time  0.284: Arrived Selected
+ ARRIVED AT TARGET Node-1 - CHECKING ANY SUBGOALS REMAINING 
+ Time  0.334: Arrived Fired
+ Time  0.334: Goal2406437 Retrieved
+ Time  0.334: Returning Selected
+ RETURNING TO GOAL Goal2406437 MOVING FROM LOCATION Node-1 TO Node ON WAY TO Node-2-2 
+ Time  0.384: Returning Fired
+ Time  0.384: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Node HOPEFULLY IN DIRECTION Node-2-2 
+ Time  0.434: Select-Best-Path Fired
+ Time  0.469: Node-To-Node-2 Retrieved
+ Time  0.469: Forward Selected
+ SELECTED PATH FROM LOCATION Node TO Node-2 ON WAY TO Node-2-2 - ADVANCING AND SUBGOALING REST 
+ Time  0.519: Forward Fired
+ Time  0.519: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Node-2 HOPEFULLY IN DIRECTION Node-2-2 
+ Time  0.569: Select-Best-Path Fired
+ Time  0.596: Node-2-To-Node-2-2 Retrieved
+ Time  0.596: Forward Selected
+ SELECTED PATH FROM LOCATION Node-2 TO Node-2-2 ON WAY TO Node-2-2 - ADVANCING AND SUBGOALING REST 
+ Time  0.646: Forward Fired
+ Time  0.646: Finish Selected
+ NO MORE SUBGOALS - PLANNING COMPLETED 
+ Time  0.696: Finish Fired
+(NODE-1-1 NODE-1 NODE NODE-2 NODE-2-2)
+
+CL-USER 844 > (reset-model-parameters (make-tree 3 3))
+40
+
+CL-USER 845 > (plan 'node-1-1-1 'node-2-2-2 60.0)
+ Time  0.000: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Node-1-1-1 HOPEFULLY IN DIRECTION Node-2-2-2 
+ Time  0.050: Select-Best-Path Fired
+ Time  0.144: Node-2-2-To-Node-2-2-2 Retrieved
+ Time  0.144: Backward Selected
+ SELECTED PATH FROM LOCATION Node-2-2 TO Node-2-2-2 - SUBGOALING GETTING THERE 
+ Time  0.194: Backward Fired
+ Time  0.194: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Node-1-1-1 HOPEFULLY IN DIRECTION Node-2-2 
+ Time  0.244: Select-Best-Path Fired
+ Time  0.317: Node-2-To-Node-2-2 Retrieved
+ Time  0.317: Backward Selected
+ SELECTED PATH FROM LOCATION Node-2 TO Node-2-2 - SUBGOALING GETTING THERE 
+ Time  0.367: Backward Fired
+ Time  0.367: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Node-1-1-1 HOPEFULLY IN DIRECTION Node-2 
+ Time  0.417: Select-Best-Path Fired
+ Time  0.474: Node-1-1-1-To-Node-1-1 Retrieved
+ Time  0.474: Forward Selected
+ SELECTED PATH FROM LOCATION Node-1-1-1 TO Node-1-1 ON WAY TO Node-2 - ADVANCING AND SUBGOALING REST 
+ Time  0.524: Forward Fired
+ Time  0.524: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Node-1-1 HOPEFULLY IN DIRECTION Node-2 
+ Time  0.574: Select-Best-Path Fired
+ Time  0.619: Node-1-1-To-Node-1 Retrieved
+ Time  0.619: Forward Selected
+ SELECTED PATH FROM LOCATION Node-1-1 TO Node-1 ON WAY TO Node-2 - ADVANCING AND SUBGOALING REST 
+ Time  0.669: Forward Fired
+ Time  0.669: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Node-1 HOPEFULLY IN DIRECTION Node-2 
+ Time  0.719: Select-Best-Path Fired
+ Time  0.753: Node-1-To-Node Retrieved
+ Time  0.753: Forward Selected
+ SELECTED PATH FROM LOCATION Node-1 TO Node ON WAY TO Node-2 - ADVANCING AND SUBGOALING REST 
+ Time  0.803: Forward Fired
+ Time  0.803: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Node HOPEFULLY IN DIRECTION Node-2 
+ Time  0.853: Select-Best-Path Fired
+ Time  0.880: Node-To-Node-2 Retrieved
+ Time  0.880: Forward Selected
+ SELECTED PATH FROM LOCATION Node TO Node-2 ON WAY TO Node-2 - ADVANCING AND SUBGOALING REST 
+ Time  0.930: Forward Fired
+ Time  0.930: Arrived Selected
+ ARRIVED AT TARGET Node-2 - CHECKING ANY SUBGOALS REMAINING 
+ Time  0.980: Arrived Fired
+ Time  0.980: Goal2406444 Retrieved
+ Time  0.980: Returning Selected
+ RETURNING TO GOAL Goal2406444 MOVING FROM LOCATION Node-2 TO Node-2-2 ON WAY TO Node-2-2 
+ Time  1.030: Returning Fired
+ Time  1.030: Arrived Selected
+ ARRIVED AT TARGET Node-2-2 - CHECKING ANY SUBGOALS REMAINING 
+ Time  1.080: Arrived Fired
+ Time  1.080: Goal2406443 Retrieved
+ Time  1.080: Returning Selected
+ RETURNING TO GOAL Goal2406443 MOVING FROM LOCATION Node-2-2 TO Node-2-2-2 ON WAY TO Node-2-2-2 
+ Time  1.130: Returning Fired
+ Time  1.130: Finish Selected
+ NO MORE SUBGOALS - PLANNING COMPLETED 
+ Time  1.180: Finish Fired
+(NODE-1-1-1 NODE-1-1 NODE-1 NODE NODE-2 NODE-2-2 NODE-2-2-2)
+
+CL-USER 846 > (reset-model-parameters (make-grid 5 5))
+25
+
+CL-USER 847 > (plan 'grid-1-1 'grid-3-3 60.0)
+ Time  0.000: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Grid-1-1 HOPEFULLY IN DIRECTION Grid-3-3 
+ Time  0.050: Select-Best-Path Fired
+ Time  0.190: Grid-1-1-To-Grid-1-2 Retrieved
+ Time  0.190: Forward Selected
+ SELECTED PATH FROM LOCATION Grid-1-1 TO Grid-1-2 ON WAY TO Grid-3-3 - ADVANCING AND SUBGOALING REST 
+ Time  0.240: Forward Fired
+ Time  0.240: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Grid-1-2 HOPEFULLY IN DIRECTION Grid-3-3 
+ Time  0.290: Select-Best-Path Fired
+ Time  0.366: Grid-1-2-To-Grid-2-2 Retrieved
+ Time  0.366: Forward Selected
+ SELECTED PATH FROM LOCATION Grid-1-2 TO Grid-2-2 ON WAY TO Grid-3-3 - ADVANCING AND SUBGOALING REST 
+ Time  0.416: Forward Fired
+ Time  0.416: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Grid-2-2 HOPEFULLY IN DIRECTION Grid-3-3 
+ Time  0.466: Select-Best-Path Fired
+ Time  0.543: Grid-3-2-To-Grid-3-3 Retrieved
+ Time  0.543: Backward Selected
+ SELECTED PATH FROM LOCATION Grid-3-2 TO Grid-3-3 - SUBGOALING GETTING THERE 
+ Time  0.593: Backward Fired
+ Time  0.593: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Grid-2-2 HOPEFULLY IN DIRECTION Grid-3-2 
+ Time  0.643: Select-Best-Path Fired
+ Time  0.660: Grid-2-2-To-Grid-3-2 Retrieved
+ Time  0.660: Forward Selected
+ SELECTED PATH FROM LOCATION Grid-2-2 TO Grid-3-2 ON WAY TO Grid-3-2 - ADVANCING AND SUBGOALING REST 
+ Time  0.710: Forward Fired
+ Time  0.710: Arrived Selected
+ ARRIVED AT TARGET Grid-3-2 - CHECKING ANY SUBGOALS REMAINING 
+ Time  0.760: Arrived Fired
+ Time  0.760: Goal2406454 Retrieved
+ Time  0.760: Returning Selected
+ RETURNING TO GOAL Goal2406454 MOVING FROM LOCATION Grid-3-2 TO Grid-3-3 ON WAY TO Grid-3-3 
+ Time  0.810: Returning Fired
+ Time  0.810: Finish Selected
+ NO MORE SUBGOALS - PLANNING COMPLETED 
+ Time  0.860: Finish Fired
+(GRID-1-1 GRID-1-2 GRID-2-2 GRID-3-2 GRID-3-3)
+
+CL-USER 848 > (plan 'grid-3-3 'grid-1-1 60.0)
+ Time  0.860: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Grid-3-3 HOPEFULLY IN DIRECTION Grid-1-1 
+ Time  0.910: Select-Best-Path Fired
+ Time  1.050: Grid-2-1-To-Grid-1-1 Retrieved
+ Time  1.050: Backward Selected
+ SELECTED PATH FROM LOCATION Grid-2-1 TO Grid-1-1 - SUBGOALING GETTING THERE 
+ Time  1.100: Backward Fired
+ Time  1.100: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Grid-3-3 HOPEFULLY IN DIRECTION Grid-2-1 
+ Time  1.150: Select-Best-Path Fired
+ Time  1.226: Grid-2-2-To-Grid-2-1 Retrieved
+ Time  1.226: Backward Selected
+ SELECTED PATH FROM LOCATION Grid-2-2 TO Grid-2-1 - SUBGOALING GETTING THERE 
+ Time  1.276: Backward Fired
+ Time  1.276: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Grid-3-3 HOPEFULLY IN DIRECTION Grid-2-2 
+ Time  1.326: Select-Best-Path Fired
+ Time  1.404: Grid-3-3-To-Grid-2-3 Retrieved
+ Time  1.404: Forward Selected
+ SELECTED PATH FROM LOCATION Grid-3-3 TO Grid-2-3 ON WAY TO Grid-2-2 - ADVANCING AND SUBGOALING REST 
+ Time  1.454: Forward Fired
+ Time  1.454: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Grid-2-3 HOPEFULLY IN DIRECTION Grid-2-2 
+ Time  1.504: Select-Best-Path Fired
+ Time  1.521: Grid-2-3-To-Grid-2-2 Retrieved
+ Time  1.521: Forward Selected
+ SELECTED PATH FROM LOCATION Grid-2-3 TO Grid-2-2 ON WAY TO Grid-2-2 - ADVANCING AND SUBGOALING REST 
+ Time  1.571: Forward Fired
+ Time  1.571: Arrived Selected
+ ARRIVED AT TARGET Grid-2-2 - CHECKING ANY SUBGOALS REMAINING 
+ Time  1.621: Arrived Fired
+ Time  1.621: Goal2406459 Retrieved
+ Time  1.621: Returning Selected
+ RETURNING TO GOAL Goal2406459 MOVING FROM LOCATION Grid-2-2 TO Grid-2-1 ON WAY TO Grid-2-1 
+ Time  1.671: Returning Fired
+ Time  1.671: Arrived Selected
+ ARRIVED AT TARGET Grid-2-1 - CHECKING ANY SUBGOALS REMAINING 
+ Time  1.721: Arrived Fired
+ Time  1.721: Goal2406458 Retrieved
+ Time  1.721: Returning Selected
+ RETURNING TO GOAL Goal2406458 MOVING FROM LOCATION Grid-2-1 TO Grid-1-1 ON WAY TO Grid-1-1 
+ Time  1.771: Returning Fired
+ Time  1.771: Finish Selected
+ NO MORE SUBGOALS - PLANNING COMPLETED 
+ Time  1.821: Finish Fired
+(GRID-3-3 GRID-2-3 GRID-2-2 GRID-2-1 GRID-1-1)
+
+CL-USER 849 > (plan 'grid-1-1 'grid-5-5 60.0)
+ Time  1.821: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Grid-1-1 HOPEFULLY IN DIRECTION Grid-5-5 
+ Time  1.871: Select-Best-Path Fired
+ Time  2.250: Grid-5-4-To-Grid-5-5 Retrieved
+ Time  2.250: Backward Selected
+ SELECTED PATH FROM LOCATION Grid-5-4 TO Grid-5-5 - SUBGOALING GETTING THERE 
+ Time  2.300: Backward Fired
+ Time  2.300: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Grid-1-1 HOPEFULLY IN DIRECTION Grid-5-4 
+ Time  2.350: Select-Best-Path Fired
+ Time  2.592: Grid-4-4-To-Grid-5-4 Retrieved
+ Time  2.592: Backward Selected
+ SELECTED PATH FROM LOCATION Grid-4-4 TO Grid-5-4 - SUBGOALING GETTING THERE 
+ Time  2.642: Backward Fired
+ Time  2.642: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Grid-1-1 HOPEFULLY IN DIRECTION Grid-4-4 
+ Time  2.692: Select-Best-Path Fired
+ Time  2.922: Grid-1-1-To-Grid-1-2 Retrieved
+ Time  2.922: Forward Selected
+ SELECTED PATH FROM LOCATION Grid-1-1 TO Grid-1-2 ON WAY TO Grid-4-4 - ADVANCING AND SUBGOALING REST 
+ Time  2.972: Forward Fired
+ Time  2.972: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Grid-1-2 HOPEFULLY IN DIRECTION Grid-4-4 
+ Time  3.022: Select-Best-Path Fired
+ Time  3.162: Grid-1-2-To-Grid-2-2 Retrieved
+ Time  3.162: Forward Selected
+ SELECTED PATH FROM LOCATION Grid-1-2 TO Grid-2-2 ON WAY TO Grid-4-4 - ADVANCING AND SUBGOALING REST 
+ Time  3.212: Forward Fired
+ Time  3.212: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Grid-2-2 HOPEFULLY IN DIRECTION Grid-4-4 
+ Time  3.262: Select-Best-Path Fired
+ Time  3.412: Grid-4-3-To-Grid-4-4 Retrieved
+ Time  3.412: Backward Selected
+ SELECTED PATH FROM LOCATION Grid-4-3 TO Grid-4-4 - SUBGOALING GETTING THERE 
+ Time  3.462: Backward Fired
+ Time  3.462: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Grid-2-2 HOPEFULLY IN DIRECTION Grid-4-3 
+ Time  3.512: Select-Best-Path Fired
+ Time  3.586: Grid-3-3-To-Grid-4-3 Retrieved
+ Time  3.586: Backward Selected
+ SELECTED PATH FROM LOCATION Grid-3-3 TO Grid-4-3 - SUBGOALING GETTING THERE 
+ Time  3.636: Backward Fired
+ Time  3.636: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Grid-2-2 HOPEFULLY IN DIRECTION Grid-3-3 
+ Time  3.686: Select-Best-Path Fired
+ Time  3.763: Grid-2-3-To-Grid-3-3 Retrieved
+ Time  3.763: Backward Selected
+ SELECTED PATH FROM LOCATION Grid-2-3 TO Grid-3-3 - SUBGOALING GETTING THERE 
+ Time  3.813: Backward Fired
+ Time  3.813: Select-Best-Path Selected
+ RETRIEVING FORWARD LINK FROM LOCATION Grid-2-2 HOPEFULLY IN DIRECTION Grid-2-3 
+ Time  3.863: Select-Best-Path Fired
+ Time  3.880: Grid-2-2-To-Grid-2-3 Retrieved
+ Time  3.880: Forward Selected
+ SELECTED PATH FROM LOCATION Grid-2-2 TO Grid-2-3 ON WAY TO Grid-2-3 - ADVANCING AND SUBGOALING REST 
+ Time  3.930: Forward Fired
+ Time  3.930: Arrived Selected
+ ARRIVED AT TARGET Grid-2-3 - CHECKING ANY SUBGOALS REMAINING 
+ Time  3.980: Arrived Fired
+ Time  3.980: Goal2406471 Retrieved
+ Time  3.980: Returning Selected
+ RETURNING TO GOAL Goal2406471 MOVING FROM LOCATION Grid-2-3 TO Grid-3-3 ON WAY TO Grid-3-3 
+ Time  4.030: Returning Fired
+ Time  4.030: Arrived Selected
+ ARRIVED AT TARGET Grid-3-3 - CHECKING ANY SUBGOALS REMAINING 
+ Time  4.080: Arrived Fired
+ Time  4.080: Goal2406470 Retrieved
+ Time  4.080: Returning Selected
+ RETURNING TO GOAL Goal2406470 MOVING FROM LOCATION Grid-3-3 TO Grid-4-3 ON WAY TO Grid-4-3 
+ Time  4.130: Returning Fired
+ Time  4.130: Arrived Selected
+ ARRIVED AT TARGET Grid-4-3 - CHECKING ANY SUBGOALS REMAINING 
+ Time  4.180: Arrived Fired
+ Time  4.180: Goal2406469 Retrieved
+ Time  4.180: Returning Selected
+ RETURNING TO GOAL Goal2406469 MOVING FROM LOCATION Grid-4-3 TO Grid-4-4 ON WAY TO Grid-4-4 
+ Time  4.230: Returning Fired
+ Time  4.230: Arrived Selected
+ ARRIVED AT TARGET Grid-4-4 - CHECKING ANY SUBGOALS REMAINING 
+ Time  4.280: Arrived Fired
+ Time  4.280: Goal2406466 Retrieved
+ Time  4.280: Returning Selected
+ RETURNING TO GOAL Goal2406466 MOVING FROM LOCATION Grid-4-4 TO Grid-5-4 ON WAY TO Grid-5-4 
+ Time  4.330: Returning Fired
+ Time  4.330: Arrived Selected
+ ARRIVED AT TARGET Grid-5-4 - CHECKING ANY SUBGOALS REMAINING 
+ Time  4.380: Arrived Fired
+ Time  4.380: Goal2406465 Retrieved
+ Time  4.380: Returning Selected
+ RETURNING TO GOAL Goal2406465 MOVING FROM LOCATION Grid-5-4 TO Grid-5-5 ON WAY TO Grid-5-5 
+ Time  4.430: Returning Fired
+ Time  4.430: Finish Selected
+ NO MORE SUBGOALS - PLANNING COMPLETED 
+ Time  4.480: Finish Fired
+(GRID-1-1 GRID-1-2 GRID-2-2 GRID-2-3 GRID-3-3 GRID-4-3 GRID-4-4 GRID-5-4 GRID-5-5)
+
+CL-USER 850 > 
+|#

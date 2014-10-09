@@ -1,0 +1,1 @@
+subj cond time max.straight bot.width subj.norm.area area plen.subj plen.model plen.baseline png 

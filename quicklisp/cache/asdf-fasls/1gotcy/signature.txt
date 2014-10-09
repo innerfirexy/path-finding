@@ -1,0 +1,4 @@
+lisp-implementation-type: Clozure Common Lisp
+lisp-implementation-version: Version 1.9-r15758  (DarwinX8632)
+machine-type: x86_64
+machine-version: MacBookPro9,2

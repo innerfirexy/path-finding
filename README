@@ -1,0 +1,12 @@
+## README for path-finding
+## Yang Xu
+## 10/9/2014
+
+1. run rlwrap ccl in terminal
+
+2. (load "path-finding-Yang.lisp")
+
+3. make sure that sim and T3-web is running, then run (start-predict)
+	- it compares the ACT-R planning with the actual pose every 1 sec
+	- if there is a deviation, the terminal outputs "explanation triggered!", and the "echo ex" command is called at the same time
+	- the loop ends when the distance between pose and goal is less than 10 pix
