@@ -66,6 +66,11 @@
 ;; reverse y before calling graphical-solve: 3288-3255=33, 3288-2388=900
 ;; (graphical-solve "t3v1.png" (cons 361 33) (cons 308 900))
 
+;; 10/13/2014
+;; work with era_actr.gif
+;; (single-image-solve "era_actr.gif" (cons 211 1900) (cons 180 1394))
+;; (graphical-solve "era_actr.gif" (cons 211 19) (cons 180 525))
+
 
 
 ;; --debug--
@@ -180,11 +185,11 @@ The resulting graph is circular."
 
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-	(load "quicklisp.lisp")
 	(ql:quickload "cl-vectors")
 	(ql:quickload "vecto")
 	(ql:quickload "skippy")
 	(ql:quickload "cl-json")
+	(ql:quickload "cl-ppcre")
 )
 
 
@@ -608,7 +613,8 @@ The resulting graph is circular."
 ;  (walk-to (cons 300 300))
   
   (let* (
-	 (stream (skippy::load-data-stream (convert-to-gif image-file)))
+	 (stream (skippy::load-data-stream 
+	 	(if (string= (subseq image-file (- (length image-file) 4) (length image-file)) ".png") (convert-to-gif image-file) image-file)))
 	 (image (aref (skippy::images stream) 0))
 	 (canvas-width (skippy::width image))
 	 (canvas-height (skippy::height image))
@@ -635,14 +641,15 @@ The resulting graph is circular."
 
 (defun single-image-solve (input-file start end)
 	;; change some global settings
-	(setq *straight-line-length* 100) ;; with *square-width* = 20: 50-->(5.315 seconds), 70-->(5.822 seconds), 40-->(5.667 seconds)
-	(setq *robot-width* 10)
-	(setq *square-width* 50) ;; larger *square-width* means longer running time
+	; (setq *straight-line-length* 100) ;; with *square-width* = 20: 50-->(5.315 seconds), 70-->(5.822 seconds), 40-->(5.667 seconds)
+	; (setq *robot-width* 10)
+	; (setq *square-width* 50) ;; larger *square-width* means longer running time
 	;; local variables
 	(let* ((*input-file* input-file)
-		(*waypoints-file* (concatenate 'string (subseq input-file 0 (search ".png" input-file)) "-waypoints.png"))
-		(*output-file* (concatenate 'string (subseq input-file 0 (search ".png" input-file)) "-output.png"))
-		(stream (skippy::load-data-stream (convert-to-gif input-file)))
+		(*waypoints-file* (concatenate 'string (subseq input-file 0 (- (length input-file) 4)) "-waypoints.png"))
+		(*output-file* (concatenate 'string (subseq input-file 0 (- (length input-file) 4)) "-output.png"))
+		(stream (skippy::load-data-stream 
+			(if (string= (subseq input-file (- (length input-file) 4) (length input-file)) ".png") (convert-to-gif input-file) input-file)))
 		(image (aref (skippy::images stream) 0))
 		(*canvas-width* (skippy::width image))
 		(*canvas-height* (skippy::height image)))
@@ -1677,9 +1684,6 @@ We may need to set *density-sampling* to t, but then the colors have to be right
 
 	   (list pixel-width left top)))
 
-
-;(asdf:oos 'asdf:load-op 'cl-ppcre)  ;commented out by Yang
-(ql:quickload "cl-ppcre")	;added by Yang
 
 (defun run-over-geo-files ()
   
