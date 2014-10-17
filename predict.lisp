@@ -6,18 +6,15 @@
 (defparameter *robot-previous-pos* nil)
 (defparameter *robot-goal-pos* nil)
 (defparameter *output* nil)
-(defparameter *pos-file* "/usr/local/Cellar/glassfish/4.0/libexec/glassfish/domains/domain1/docroot/era_actr_pose.txt")
-(defparameter *goal-file* "/usr/local/Cellar/glassfish/4.0/libexec/glassfish/domains/domain1/docroot/era_actr_goal.txt")
-(defparameter *map-file* "./t3v1.png")
-(defparameter *local-height* 3288)
-(defparameter *local-width* 598)
-(defparameter *actr-height* 1919)
-(defparameter *actr-width* 330)
+(defparameter *pos-file* "../glassfish/4.0/libexec/glassfish/domains/domain1/docroot/era_actr_pose.txt")
+(defparameter *goal-file* "../glassfish/4.0/libexec/glassfish/domains/domain1/docroot/era_actr_goal.txt")
+(defparameter *map-file* "../glassfish/4.0/libexec/glassfish/domains/domain1/docroot/era_actr.gif")
+(defparameter *local-height* 2080)
+(defparameter *local-width* 224)
+(defparameter *actr-height* 2080)
+(defparameter *actr-width* 224)
 
 ;; load packages
-;(load "./quicklisp/setup.lisp")
-;(ql:quickload "cl-ppcre")
-;(ql:quickload "cl-vectors")
 (ql:quickload "split-sequence")
 (ql:quickload "trivial-shell")
 
@@ -37,7 +34,7 @@
 (defun read-tcp (target)
 	(let ((cmd (concatenate 'string "echo \"" target "\" | nc localhost 7721")))
 		(setq return-val (trivial-shell:shell-command cmd))
-		(unless (string= (subseq return-val 0 9) "ERA:=null")
+		(unless (or (string= return-val "") (string= (subseq return-val 0 8) "ERA:null"))
 			(setq val (cl-ppcre::scan-to-strings "\\(.*\\)" return-val)) ;; substring within the parenthesis
 			(setq val (subseq val 1 (- (length val) 1)))
 			(setq val-li (split-sequence:split-sequence #\, val)) ;; split the string into list
@@ -68,8 +65,7 @@
 (defun trans-coor (pos)
 	(let ((pos-x (car pos))
 		(pos-y (cdr pos)))
-	(setq pos-x (round (* pos-x *local-height* (/ 1 *actr-height*))))
-	(setq pos-y (- *local-height* (round (* pos-y *local-height* (/ 1 *actr-height*)))))
+	(setq pos-y (- *local-height* pos-y))
 	(cons pos-x pos-y)))
 
 ;; the function that sets parameters
@@ -86,6 +82,7 @@
 	(setq *robot-goal-pos* nil)
 	;; main loop
 	(loop while t
+		;; end condition
 		until (and *robot-current-pos* *robot-goal-pos* (< (vectors::point-distance *robot-current-pos* *robot-goal-pos*) 10))
 		do 
 		(progn
@@ -108,25 +105,3 @@
 						(setq *robot-current-pos* pose))))
 			(unless *robot-goal-pos* (print "not started."))
 			(sleep 1))))
-
-
-
-;; read the position every 1 sec
-; (loop while t 
-; 	do 
-; 	(progn 
-; 		(setq pose (read-file *pos-file*))
-; 		(setq *robot-goal-pos* (read-file *goal-file*))
-; 		;; decide whether to trigger
-; 		(and *visual-trace-path*
-; 			(or (/= (car *robot-current-pos*) (car pose)) (/= (cdr *robot-current-pos*) (cdr pose)))
-; 			(decide pose)
-; 			(trigger))
-; 		(unless (decide pose) (print "not trigger!"))
-; 		;; update the position and plan
-; 		(setq *robot-previous-pos* *robot-current-pos*)
-; 		(setq *robot-current-pos* pose)
-; 		(graphical-solve *map-file* *robot-current-pos* *robot-goal-pos*)
-; 		;; sleep for 1 sec
-; 		;(sleep 1)
-; 		))
