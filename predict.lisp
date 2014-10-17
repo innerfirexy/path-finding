@@ -5,10 +5,13 @@
 (defparameter *robot-current-pos* nil)
 (defparameter *robot-previous-pos* nil)
 (defparameter *robot-goal-pos* nil)
+(defparameter *robot-goal-history* nil)
+
 (defparameter *output* nil)
 (defparameter *pos-file* "../glassfish/4.0/libexec/glassfish/domains/domain1/docroot/era_actr_pose.txt")
 (defparameter *goal-file* "../glassfish/4.0/libexec/glassfish/domains/domain1/docroot/era_actr_goal.txt")
 (defparameter *map-file* "../glassfish/4.0/libexec/glassfish/domains/domain1/docroot/era_actr.gif")
+
 (defparameter *local-height* 2080)
 (defparameter *local-width* 224)
 (defparameter *actr-height* 2080)
@@ -74,6 +77,10 @@
 	(setq *robot-width* 10)
 	(setq *square-width* 50))
 
+;; the function that judges if two points are equal
+(defun point-equal (p1 p2)
+	(and (= (car p1) (car p2)) (= (cdr p1) (cdr p2))))
+
 ;; the function that starts the predict process
 (defun start-predict ()
 	;; initialize params
@@ -83,25 +90,46 @@
 	;; main loop
 	(loop while t
 		;; end condition
-		until (and *robot-current-pos* *robot-goal-pos* (< (vectors::point-distance *robot-current-pos* *robot-goal-pos*) 10))
+		; until (and *robot-current-pos* *robot-goal-pos* (< (vectors::point-distance *robot-current-pos* *robot-goal-pos*) 10))
 		do 
 		(progn
 			(setq *robot-goal-pos* (read-tcp "actr.goal"))
 			(setq pose (read-tcp "actr.pose"))
-			(when *robot-goal-pos*
-				(if *robot-current-pos* 
-					;; do the ACT-R planning, and compare the pose with the plan (if pose is different from *robot-current-pos*)
-					(progn 
-						(graphical-solve *map-file* (trans-coor *robot-current-pos*) (trans-coor *robot-goal-pos*))
-						(and *visual-trace-path*
-							(or (/= (car *robot-current-pos*) (car pose)) (/= (cdr *robot-current-pos*) (cdr pose)))
-							(decide (trans-coor pose))
-							(trigger))
-						(setq *robot-previous-pos* *robot-current-pos*)
-						(setq *robot-current-pos* pose))
-					;; else, do not do the planning when *robot-current-pos* is not assigned
-					(progn 
-						(setq *robot-previous-pos* *robot-current-pos*)
-						(setq *robot-current-pos* pose))))
-			(unless *robot-goal-pos* (print "not started."))
+			(if *robot-goal-pos* 
+				;; if goal is not nil, do something
+				(if *robot-goal-history*
+					;; if the goal history is not nil
+					(progn
+						(setq prev-goal (car (last *robot-goal-history*)))
+						(if (point-equal prev-goal *robot-goal-pos*)
+							;; if the goal is the same as the previous goal
+							(if *robot-current-pos* 
+								;; if *robot-current-pos* is not nil
+								(if (point-equal *robot-current-pos* pose)
+									;; if pose equals *robot-current-pos*, the robot is no longer moving, do not do the ACT-R planning
+									(print "stand by.")
+									;; do the ACT-R planning, and compare the pose with the plan (if pose is different from *robot-current-pos*)
+									(progn 
+										(graphical-solve *map-file* (trans-coor *robot-current-pos*) (trans-coor *robot-goal-pos*))
+										(and *visual-trace-path*
+											(decide (trans-coor pose))
+											(trigger))
+										(setq *robot-previous-pos* *robot-current-pos*)
+										(setq *robot-current-pos* pose)))
+								;; else, do not do the planning when *robot-current-pos* is not assigned
+								(progn 
+									(setq *robot-previous-pos* *robot-current-pos*)
+									(setq *robot-current-pos* pose)))
+							;; else, the goal is not the same as the previous goal
+							(progn
+								(setq *robot-goal-history* (append *robot-goal-history* (list *robot-goal-pos*))) ;; add the new goal to the history
+								(setq *robot-current-pos* pose) ;; update the current pos
+								(setq *visual-trace-path* nil) ;; empty the previous plan
+								)))
+					;; else, the goal history is nil, simply add the goal to history
+					(progn
+						(setq *robot-goal-history* (list *robot-goal-pos*))
+						(setq *robot-current-pos* pose)))					
+				;; if goal is nil, just print "not started"
+				(print "not started."))
 			(sleep 1))))
