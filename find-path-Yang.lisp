@@ -1845,3 +1845,6 @@ We may need to set *density-sampling* to t, but then the colors have to be right
 
 ;; to initialize some params
 (make-maze)
+
+;; start to predict
+(start-predict)
