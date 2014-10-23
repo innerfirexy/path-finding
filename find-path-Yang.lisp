@@ -1841,10 +1841,9 @@ We may need to set *density-sampling* to t, but then the colors have to be right
 
 ;; load predict.lisp and set the parameters
 (load "predict.lisp")
-(set-param) ;; defined in predict.lisp
 
-;; to initialize some params
-; (make-maze)
+;; set the params
+(set-param)
 
 ;; start to predict
 (start-predict)

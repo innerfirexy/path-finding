@@ -110,7 +110,9 @@
 									(print "stand by.")
 									;; do the ACT-R planning, and compare the pose with the plan (if pose is different from *robot-current-pos*)
 									(progn 
-										(graphical-solve *map-file* (trans-coor *robot-current-pos*) (trans-coor *robot-goal-pos*))
+										(vecto::with-canvas (:width *actr-width* :height *actr-height*)
+											(vecto::with-graphics-state
+												(graphical-solve *map-file* (trans-coor *robot-current-pos*) (trans-coor *robot-goal-pos*))))
 										(and *visual-trace-path*
 											(decide (trans-coor pose))
 											(trigger))
