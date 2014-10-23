@@ -8,9 +8,9 @@
 (defparameter *robot-goal-history* nil)
 
 (defparameter *output* nil)
-(defparameter *pos-file* "../glassfish/4.0/libexec/glassfish/domains/domain1/docroot/era_actr_pose.txt")
-(defparameter *goal-file* "../glassfish/4.0/libexec/glassfish/domains/domain1/docroot/era_actr_goal.txt")
-(defparameter *map-file* "../glassfish/4.0/libexec/glassfish/domains/domain1/docroot/era_actr.gif")
+(defparameter *pos-file* "../glassfish/4.1/libexec/glassfish/domains/domain1/docroot/era_actr_pose.txt")
+(defparameter *goal-file* "../glassfish/4.1/libexec/glassfish/domains/domain1/docroot/era_actr_goal.txt")
+(defparameter *map-file* "../glassfish/4.1/libexec/glassfish/domains/domain1/docroot/era_actr.gif")
 
 (defparameter *local-height* 2080)
 (defparameter *local-width* 224)
