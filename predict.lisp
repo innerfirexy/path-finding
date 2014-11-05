@@ -14,8 +14,8 @@
 
 (defparameter *local-height* 2080)
 (defparameter *local-width* 224)
-(defparameter *actr-height* 2080)
-(defparameter *actr-width* 224)
+(defparameter *actr-height* nil)
+(defparameter *actr-width* nil)
 
 ;; load packages
 (ql:quickload "split-sequence")
@@ -68,14 +68,21 @@
 (defun trans-coor (pos)
 	(let ((pos-x (car pos))
 		(pos-y (cdr pos)))
-	(setq pos-y (- *local-height* pos-y))
+	(setq pos-y (- *actr-height* pos-y))
 	(cons pos-x pos-y)))
 
 ;; the function that sets parameters
 (defun set-param ()
 	(setq *straight-line-length* 100)
 	(setq *robot-width* 10)
-	(setq *square-width* 50))
+	(setq *square-width* 50)
+	(let* ((stream (skippy::load-data-stream 
+		(if (string= (subseq *map-file* (- (length *map-file*) 4) (length *map-file*)) ".png") (convert-to-gif *map-file*) *map-file*)))
+		(image (aref (skippy::images stream) 0))
+		(canvas-width (skippy::width image))
+		(canvas-height (skippy::height image)))
+	(setq *actr-width* canvas-width)
+	(setq *actr-height* canvas-height)))
 
 ;; the function that judges if two points are equal
 (defun point-equal (p1 p2)
@@ -107,7 +114,10 @@
 								;; if *robot-current-pos* is not nil
 								(if (point-equal *robot-current-pos* pose)
 									;; if pose equals *robot-current-pos*, the robot is no longer moving, do not do the ACT-R planning
-									(print "stand by.")
+									(progn
+										(print (concatenate 'string "pose: " (format nil "~a" pose)))
+										(print (concatenate 'string "*robot-current-pos* " (format nil "~a" *robot-current-pos*)))
+										(print "stand by."))
 									;; do the ACT-R planning, and compare the pose with the plan (if pose is different from *robot-current-pos*)
 									(progn 
 										(vecto::with-canvas (:width *actr-width* :height *actr-height*)
