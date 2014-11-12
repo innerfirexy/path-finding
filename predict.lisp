@@ -119,15 +119,17 @@
 										(print (concatenate 'string "*robot-current-pos* " (format nil "~a" *robot-current-pos*)))
 										(print "stand by."))
 									;; do the ACT-R planning, and compare the pose with the plan (if pose is different from *robot-current-pos*)
-									(progn 
-										(vecto::with-canvas (:width *actr-width* :height *actr-height*)
-											(vecto::with-graphics-state
-												(graphical-solve *map-file* (trans-coor *robot-current-pos*) (trans-coor *robot-goal-pos*))))
-										(and *visual-trace-path*
-											(decide (trans-coor pose))
-											(trigger))
-										(setq *robot-previous-pos* *robot-current-pos*)
-										(setq *robot-current-pos* pose)))
+									(if (probe-file *map-file*) ;; check if the map-file exists
+										(progn 
+											(vecto::with-canvas (:width *actr-width* :height *actr-height*)
+												(vecto::with-graphics-state
+													(graphical-solve *map-file* (trans-coor *robot-current-pos*) (trans-coor *robot-goal-pos*))))
+											(and *visual-trace-path*
+												(decide (trans-coor pose))
+												(trigger))
+											(setq *robot-previous-pos* *robot-current-pos*)
+											(setq *robot-current-pos* pose)))
+										)
 								;; else, do not do the planning when *robot-current-pos* is not assigned
 								(progn 
 									(setq *robot-previous-pos* *robot-current-pos*)
