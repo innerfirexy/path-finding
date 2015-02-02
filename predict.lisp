@@ -76,13 +76,17 @@
 	(setq *straight-line-length* 100)
 	(setq *robot-width* 10)
 	(setq *square-width* 50)
-	(let* ((stream (skippy::load-data-stream 
-		(if (string= (subseq *map-file* (- (length *map-file*) 4) (length *map-file*)) ".png") (convert-to-gif *map-file*) *map-file*)))
-		(image (aref (skippy::images stream) 0))
-		(canvas-width (skippy::width image))
-		(canvas-height (skippy::height image)))
-	(setq *actr-width* canvas-width)
-	(setq *actr-height* canvas-height)))
+	(if (probe-file *map-file*) ;; check if the map-file exists
+		(let* ((stream (skippy::load-data-stream 
+			(if (string= (subseq *map-file* (- (length *map-file*) 4) (length *map-file*)) ".png") (convert-to-gif *map-file*) *map-file*)))
+			(image (aref (skippy::images stream) 0))
+			(canvas-width (skippy::width image))
+			(canvas-height (skippy::height image)))
+			(setq *actr-width* canvas-width)
+			(setq *actr-height* canvas-height))
+		(progn
+			(setq *actr-width* 0)
+			(setq *actr-height* 0))))
 
 ;; the function that judges if two points are equal
 (defun point-equal (p1 p2)
@@ -121,6 +125,8 @@
 									;; do the ACT-R planning, and compare the pose with the plan (if pose is different from *robot-current-pos*)
 									(if (probe-file *map-file*) ;; check if the map-file exists
 										(progn 
+											(if (and (= *actr-width* 0) (= *actr-height* 0))
+												(set-param))
 											(vecto::with-canvas (:width *actr-width* :height *actr-height*)
 												(vecto::with-graphics-state
 													(graphical-solve *map-file* (trans-coor *robot-current-pos*) (trans-coor *robot-goal-pos*))))
