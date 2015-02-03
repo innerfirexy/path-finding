@@ -16,6 +16,7 @@
 (defparameter *local-width* 224)
 (defparameter *actr-height* nil)
 (defparameter *actr-width* nil)
+(defparameter *last-expl-time* nil)
 
 ;; load packages
 (ql:quickload "split-sequence")
@@ -61,8 +62,13 @@
 
 ;; the function that triggers explanation
 (defun trigger ()
-	(trivial-shell:shell-command (concatenate 'string "echo \"ex\" | nc localhost 7721"))
-	(print "explanation triggered!"))
+	(let ((current-time (get-universal-time)))
+		(if (> (- current-time *last-expl-time*) 3)
+			(progn
+				(setq *last-expl-time* current-time)
+				(trivial-shell:shell-command (concatenate 'string "echo \"ex\" | nc localhost 7721"))
+				(print "explanation triggered!"))
+			(print "deviation detected, but explanation not triggered."))))
 
 ;; the function that transforms the coordinates to fit the t3v1.png
 (defun trans-coor (pos)
@@ -76,6 +82,7 @@
 	(setq *straight-line-length* 100)
 	(setq *robot-width* 10)
 	(setq *square-width* 50)
+	(setq *last-expl-time* 0)
 	(if (probe-file *map-file*) ;; check if the map-file exists
 		(let* ((stream (skippy::load-data-stream 
 			(if (string= (subseq *map-file* (- (length *map-file*) 4) (length *map-file*)) ".png") (convert-to-gif *map-file*) *map-file*)))
